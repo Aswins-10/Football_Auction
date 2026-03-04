@@ -18,13 +18,10 @@ export default function LoginPage() {
         try {
             const user = await login(form.email, form.password);
             if (user.role === 'ADMIN') {
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
-                setError('Admins must sign in via the Admin Portal.');
-                setLoading(false);
-                return;
+                navigate('/admin/dashboard');
+            } else {
+                navigate('/dashboard');
             }
-            navigate('/dashboard');
         } catch (err) {
             setError(err.response?.data?.message || 'Invalid email or password.');
         } finally {

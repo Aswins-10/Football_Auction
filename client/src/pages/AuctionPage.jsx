@@ -56,7 +56,8 @@ export default function AuctionPage() {
     // ── Socket connection ──────────────────────────────────────────────────────
     useEffect(() => {
         const token = localStorage.getItem('token');
-        const socket = io('http://localhost:5000', { auth: { token }, transports: ['websocket'] });
+        const socketUrl = `http://${window.location.hostname}:5000`;
+        const socket = io(socketUrl, { auth: { token }, transports: ['websocket'] });
         socketRef.current = socket;
 
         socket.on('connect', () => {

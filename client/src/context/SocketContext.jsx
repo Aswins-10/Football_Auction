@@ -9,7 +9,8 @@ export function SocketProvider({ children }) {
 
     const connect = (token) => {
         if (socketRef.current?.connected) return;
-        socketRef.current = io('http://localhost:5000', {
+        const socketUrl = `http://${window.location.hostname}:5000`;
+        socketRef.current = io(socketUrl, {
             auth: { token },
             transports: ['websocket'],
         });

@@ -9,7 +9,6 @@ import DashboardPage from './pages/DashboardPage';
 import TournamentPage from './pages/TournamentPage';
 import AuctionPage from './pages/AuctionPage';
 import TeamPage from './pages/TeamPage';
-import AdminLoginPage from './pages/AdminLoginPage';
 
 // Layout with navbar — used by all pages
 function MainLayout() {
@@ -26,11 +25,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Admin portal — no navbar, completely isolated */}
-          <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
-          <Route path="/admin/login" element={<AdminLoginPage />} />
-
-          {/* All other pages share the Navbar via MainLayout */}
+          {/* All pages share the Navbar via MainLayout */}
           <Route element={<MainLayout />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
