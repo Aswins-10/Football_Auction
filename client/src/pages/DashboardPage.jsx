@@ -16,6 +16,8 @@ export default function DashboardPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: '', totalSlots: 8, budgetPerTeam: 200, squadSizeLimit: 15, timerDuration: 20 });
     const [createError, setCreateError] = useState('');
+    const [deleteConfirm, setDeleteConfirm] = useState(null); // tournament object to delete
+    const [deleteError, setDeleteError] = useState('');
 
     const fetchTournaments = async () => {
         try {
@@ -37,6 +39,18 @@ export default function DashboardPage() {
             fetchTournaments();
         } catch (err) {
             setCreateError(err.response?.data?.message || 'Failed to create tournament');
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!deleteConfirm) return;
+        setDeleteError('');
+        try {
+            await api.delete(`/tournaments/${deleteConfirm._id}`);
+            setTournaments(prev => prev.filter(t => t._id !== deleteConfirm._id));
+            setDeleteConfirm(null);
+        } catch (err) {
+            setDeleteError(err.response?.data?.message || 'Failed to delete');
         }
     };
 
@@ -114,11 +128,11 @@ export default function DashboardPage() {
                     {tournaments.map((t) => {
                         const meta = STATUS_META[t.status] || STATUS_META.UPCOMING;
                         return (
-                            <Link to={`/tournament/${t._id}`} key={t._id} style={{ textDecoration: 'none' }}>
+                            <Link to={`/tournament/${t._id}`} key={t._id} style={{ textDecoration: 'none', display: 'block' }}>
                                 <div style={{
                                     background: 'rgba(17,24,39,0.8)', border: '1px solid rgba(55,65,81,0.4)',
                                     borderRadius: '18px', padding: '24px', height: '100%',
-                                    transition: 'all 0.2s', cursor: 'pointer',
+                                    transition: 'all 0.2s', cursor: 'pointer', position: 'relative',
                                 }}
                                     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; e.currentTarget.style.borderColor = 'rgba(5,150,105,0.3)'; }}
                                     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'rgba(55,65,81,0.4)'; }}
@@ -130,11 +144,28 @@ export default function DashboardPage() {
                                             background: 'linear-gradient(135deg, #059669, #047857)',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem',
                                         }}>🏆</div>
-                                        <span style={{
-                                            padding: '4px 10px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700,
-                                            letterSpacing: '0.05em', textTransform: 'uppercase',
-                                            background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`,
-                                        }}>{meta.label}</span>
+                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                            <span style={{
+                                                padding: '4px 10px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700,
+                                                letterSpacing: '0.05em', textTransform: 'uppercase',
+                                                background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`,
+                                            }}>{meta.label}</span>
+                                            {user?.role === 'ADMIN' && (
+                                                <button
+                                                    onClick={e => { e.preventDefault(); e.stopPropagation(); setDeleteConfirm(t); setDeleteError(''); }}
+                                                    title="Delete tournament"
+                                                    style={{
+                                                        width: '28px', height: '28px', borderRadius: '7px', border: 'none',
+                                                        background: 'rgba(239,68,68,0.15)', color: '#f87171',
+                                                        fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0,
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        transition: 'background 0.15s',
+                                                    }}
+                                                    onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.background = 'rgba(239,68,68,0.3)'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
+                                                >🗑</button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#f9fafb', margin: '0 0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -230,6 +261,32 @@ export default function DashboardPage() {
                                 }}>Cancel</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirm Modal */}
+            {deleteConfirm && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 100,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+                    background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+                }}>
+                    <div style={{
+                        background: 'rgba(17,24,39,0.98)', border: '1px solid rgba(239,68,68,0.3)',
+                        borderRadius: '20px', padding: '32px', width: '100%', maxWidth: '380px', textAlign: 'center',
+                    }}>
+                        <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f9fafb', margin: '0 0 8px' }}>Delete Tournament?</h3>
+                        <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: '0 0 4px' }}>
+                            Permanently delete <strong style={{ color: '#f9fafb' }}>{deleteConfirm.name}</strong>?
+                        </p>
+                        <p style={{ color: '#ef4444', fontSize: '0.78rem', fontWeight: 600, margin: '0 0 24px' }}>All teams and players will also be deleted.</p>
+                        {deleteError && <div style={{ marginBottom: '14px', padding: '10px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: '0.8rem' }}>⚠️ {deleteError}</div>}
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button onClick={handleDelete} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Yes, Delete</button>
+                            <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid rgba(75,85,99,0.5)', background: 'transparent', color: '#9ca3af', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                        </div>
                     </div>
                 </div>
             )}

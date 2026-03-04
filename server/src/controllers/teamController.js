@@ -98,13 +98,17 @@ const getMyTeam = async (req, res) => {
 const addBudget = async (req, res) => {
     try {
         const { amount } = req.body;
-        if (!amount || isNaN(amount) || Number(amount) <= 0)
-            return res.status(400).json({ message: 'Provide a valid positive amount' });
+        if (amount === undefined || amount === null || isNaN(amount) || Number(amount) === 0)
+            return res.status(400).json({ message: 'Provide a valid non-zero amount' });
 
         const team = await Team.findById(req.params.id);
         if (!team) return res.status(404).json({ message: 'Team not found' });
 
-        team.budgetRemaining += Number(amount);
+        const newBudget = team.budgetRemaining + Number(amount);
+        if (newBudget < 0)
+            return res.status(400).json({ message: `Cannot reduce below 0. Team only has ${team.budgetRemaining}M remaining.` });
+
+        team.budgetRemaining = newBudget;
         await team.save();
         res.json(team);
     } catch (err) {

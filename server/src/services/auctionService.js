@@ -72,17 +72,21 @@ function sanitizeState(state) {
 function makeInitialState(tournament) {
     return {
         tournamentId: tournament._id.toString(),
-        activeCategory: null,     // e.g. 'CF'
+        activeCategory: null,
         currentPlayerId: null,
         currentPlayer: null,
         currentPrice: 0,
+        previousPrice: 0,          // price before the last bid (for quit revert)
+        previousLeaderTeamId: null, // leader before the last bid
         currentLeaderTeamId: null,
         timerEndTime: null,
         timeRemaining: tournament.timerDuration,
         timerDuration: tournament.timerDuration,
-        status: 'WAITING',   // WAITING | LIVE | PAUSED | SOLD | UNSOLD | FINISHED
-        quitMap: {},          // { [playerId]: [teamId, ...] }
-        previousState: null,        // for reopen
+        status: 'WAITING',
+        quitMap: {},
+        previousState: null,
+        bidBuffer: [],             // temporary storage for bids during an active player
+        teamLastBidTime: {},       // timestamp of last bid per team (for rate limiting)
         _timerHandle: null,
         _tickInterval: null,
     };
@@ -129,7 +133,7 @@ function startTimer(tournamentId, io, onExpire) {
 
     state._timerHandle = setTimeout(async () => {
         clearInterval(tickInterval);
-        await handleTimerExpiry(tournamentId, io);
+        await onExpire(tournamentId, io);
     }, state.timeRemaining * 1000);
 }
 
@@ -181,6 +185,12 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             $inc: { budgetRemaining: -price, squadCount: 1 },
         });
 
+        // Flush buffered bids to DB
+        if (state.bidBuffer.length > 0) {
+            await BidHistory.insertMany(state.bidBuffer).catch(err => console.error('Bulk insert failed', err));
+            state.bidBuffer = [];
+        }
+
         const updatedPlayer = await Player.findById(state.currentPlayerId).populate('soldTo', 'name logo');
         const updatedTeam = await Team.findById(teamId);
 
@@ -191,19 +201,21 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             currentPrice: price,
             currentLeaderTeamId: teamId,
             quitMap: { ...state.quitMap },
+            bidBuffer: [],
         };
 
         io.to(tournamentId).emit('auction:sold', { player: updatedPlayer, team: updatedTeam, soldPrice: price });
         io.to(tournamentId).emit('bid:log', {
             message: `🎊 ${updatedPlayer.name} SOLD to ${updatedTeam.name} for ${price}M!`,
             type: 'sold',
+            category: state.activeCategory,
         });
 
-        // Emit updated category stats
+        // ... [keep rest unchanged] ...
         const stats = await getCategoryStats(tournamentId);
         io.to(tournamentId).emit('auction:category_stats', stats);
 
-        // After 5s go back to WAITING — admin must pick next player
+        // After 5s go back to WAITING
         setTimeout(() => {
             const s = getState(tournamentId);
             if (!s || s.status !== 'SOLD') return;
@@ -212,6 +224,7 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             s.currentPlayer = null;
             s.currentPrice = 0;
             s.currentLeaderTeamId = null;
+            s.bidBuffer = [];
             io.to(tournamentId).emit('auction:state', sanitizeState(s));
         }, 5000);
 
@@ -233,16 +246,20 @@ async function unsoldPlayer(tournamentId, io) {
         await Player.findByIdAndUpdate(state.currentPlayerId, { status: 'UNSOLD' });
         const player = await Player.findById(state.currentPlayerId);
 
+        // Clear bid buffer since no sale logic executed
+        state.bidBuffer = [];
+
         state.previousState = {
             currentPlayerId: state.currentPlayerId,
             currentPlayer: player,
             currentPrice: player.basePrice,
             currentLeaderTeamId: null,
             quitMap: { ...state.quitMap },
+            bidBuffer: [],
         };
 
         io.to(tournamentId).emit('auction:unsold', { player });
-        io.to(tournamentId).emit('bid:log', { message: `📋 ${player.name} went UNSOLD`, type: 'unsold' });
+        io.to(tournamentId).emit('bid:log', { message: `📋 ${player.name} went UNSOLD`, type: 'unsold', category: state.activeCategory });
 
         const stats = await getCategoryStats(tournamentId);
         io.to(tournamentId).emit('auction:category_stats', stats);
@@ -295,6 +312,7 @@ async function selectPlayer(tournamentId, playerId, io) {
             currentPrice: state.currentPrice,
             currentLeaderTeamId: state.currentLeaderTeamId,
             quitMap: { ...state.quitMap },
+            bidBuffer: [...state.bidBuffer],
         };
     }
 
@@ -303,6 +321,8 @@ async function selectPlayer(tournamentId, playerId, io) {
     state.currentPrice = player.basePrice;
     state.currentLeaderTeamId = null;
     state.quitMap[player._id.toString()] = [];
+    state.bidBuffer = [];
+    state.teamLastBidTime = {};
     state.timeRemaining = state.timerDuration;
     state.status = 'LIVE';
 
@@ -312,6 +332,7 @@ async function selectPlayer(tournamentId, playerId, io) {
     io.to(tournamentId).emit('bid:log', {
         message: `🎯 Auction started for ${player.name}`,
         type: 'system',
+        category: state.activeCategory,
     });
     startTimer(tournamentId, io, handleTimerExpiry);
     return { success: true };
@@ -338,6 +359,7 @@ async function selectCategory(tournamentId, category, io) {
     io.to(tournamentId).emit('bid:log', {
         message: `⚙️ Admin switched to category: ${category}`,
         type: 'system',
+        category,
     });
     return { success: true };
 }
@@ -381,6 +403,7 @@ async function reintroduceUnsold(tournamentId, playerId, io) {
     io.to(tournamentId).emit('bid:log', {
         message: `♻️ ${player.name} reintroduced to auction`,
         type: 'system',
+        category: state.activeCategory,
     });
 
     // Return updated player list for admin
@@ -395,6 +418,13 @@ async function placeBid(tournamentId, teamId, io) {
     const state = getState(tournamentId);
     if (!state) return { success: false, reason: 'No active auction' };
     if (state.status !== 'LIVE') return { success: false, reason: 'Auction is not live' };
+
+    // 1. Rate Limiting (300ms cooldown per team)
+    const now = Date.now();
+    const lastBidTime = state.teamLastBidTime[teamId] || 0;
+    if (now - lastBidTime < 300) {
+        return { success: false, reason: 'Please wait before placing another bid.' };
+    }
 
     const playerId = state.currentPlayerId;
     const quits = state.quitMap[playerId] || [];
@@ -414,18 +444,31 @@ async function placeBid(tournamentId, teamId, io) {
         if (team.budgetRemaining < nextPrice)
             return { success: false, reason: 'Insufficient budget' };
 
+        // Save previous price+leader so quit can revert
+        state.previousPrice = state.currentPrice;
+        state.previousLeaderTeamId = state.currentLeaderTeamId;
+
         state.currentPrice = nextPrice;
         state.currentLeaderTeamId = teamId.toString();
+        state.teamLastBidTime[teamId] = now; // update rate limit timestamp
 
-        // Reset timer
+        // Reset timer using precise timestamp
         stopTimer(tournamentId);
         state.timeRemaining = state.timerDuration;
 
-        await BidHistory.create({ tournamentId, playerId, teamId, amount: nextPrice });
+        // Buffer DB write instead of immediate save
+        state.bidBuffer.push({
+            tournamentId,
+            playerId,
+            teamId,
+            amount: nextPrice,
+            createdAt: new Date(),
+        });
 
         io.to(tournamentId).emit('bid:log', {
             message: `⚡ ${team.name} bid ${nextPrice}M for ${state.currentPlayer.name}`,
             type: 'bid',
+            category: state.activeCategory,
         });
         io.to(tournamentId).emit('auction:state', sanitizeState(state));
         startTimer(tournamentId, io, handleTimerExpiry);
@@ -453,14 +496,43 @@ async function quitBidding(tournamentId, teamId, io) {
     state.quitMap[playerId].push(teamId.toString());
 
     const team = await Team.findById(teamId);
-    if (team) {
-        io.to(tournamentId).emit('bid:log', {
-            message: `🚫 ${team.name} stepped out of bidding`,
-            type: 'quit',
-        });
-    }
-    io.to(tournamentId).emit('auction:state', sanitizeState(state));
 
+    // If quitting team was the current leader, revert their bid
+    if (state.currentLeaderTeamId === teamId.toString()) {
+        state.currentPrice = state.previousPrice || state.currentPlayer?.basePrice || 0;
+        state.currentLeaderTeamId = state.previousLeaderTeamId || null;
+        state.previousPrice = 0;
+        state.previousLeaderTeamId = null;
+        // Pop the latest bid out of buffer if it was theirs
+        if (state.bidBuffer.length > 0) {
+            const lastBid = state.bidBuffer[state.bidBuffer.length - 1];
+            if (lastBid.teamId.toString() === teamId.toString()) {
+                state.bidBuffer.pop();
+            }
+        }
+
+        // Reset timer using exact timestamp approach
+        stopTimer(tournamentId);
+        state.timeRemaining = state.timerDuration;
+        startTimer(tournamentId, io, handleTimerExpiry);
+        if (team) {
+            io.to(tournamentId).emit('bid:log', {
+                message: `🚫 ${team.name} quit — bid REVERTED to ${state.currentPrice}M`,
+                type: 'quit',
+                category: state.activeCategory,
+            });
+        }
+    } else {
+        if (team) {
+            io.to(tournamentId).emit('bid:log', {
+                message: `🚫 ${team.name} stepped out of bidding`,
+                type: 'quit',
+                category: state.activeCategory,
+            });
+        }
+    }
+
+    io.to(tournamentId).emit('auction:state', sanitizeState(state));
     await checkAutoSell(tournamentId, io);
     return { success: true };
 }
@@ -504,7 +576,7 @@ function pauseAuction(tournamentId, io) {
     pauseTimer(tournamentId);
     state.status = 'PAUSED';
     io.to(tournamentId).emit('auction:paused', sanitizeState(state));
-    io.to(tournamentId).emit('bid:log', { message: '⏸ Auction paused by admin', type: 'system' });
+    io.to(tournamentId).emit('bid:log', { message: '⏸ Auction paused by admin', type: 'system', category: state.activeCategory });
     return sanitizeState(state);
 }
 
@@ -514,7 +586,7 @@ function resumeAuction(tournamentId, io) {
     state.status = 'LIVE';
     startTimer(tournamentId, io, handleTimerExpiry);
     io.to(tournamentId).emit('auction:resumed', sanitizeState(state));
-    io.to(tournamentId).emit('bid:log', { message: '▶ Auction resumed by admin', type: 'system' });
+    io.to(tournamentId).emit('bid:log', { message: '▶ Auction resumed by admin', type: 'system', category: state.activeCategory });
     return sanitizeState(state);
 }
 
@@ -541,11 +613,13 @@ async function reopenLastPlayer(tournamentId, io) {
         soldPrice: null,
     });
 
-    // If previous was sold, refund team budget
+    // If previous was sold, refund team budget and clear DB bid hits
     if (prev.currentLeaderTeamId && player.status === 'SOLD') {
         await Team.findByIdAndUpdate(prev.currentLeaderTeamId, {
             $inc: { budgetRemaining: prev.currentPrice, squadCount: -1 },
         });
+        // Remove the successful bid if it was already bulk inserted to DB
+        await BidHistory.deleteMany({ playerId: prev.currentPlayerId });
     }
 
     state.currentPlayerId = prev.currentPlayerId;
@@ -553,12 +627,14 @@ async function reopenLastPlayer(tournamentId, io) {
     state.currentPrice = player.basePrice;
     state.currentLeaderTeamId = null;
     state.quitMap[prev.currentPlayerId] = [];
+    state.bidBuffer = []; // reset buffer
+    state.teamLastBidTime = {};
     state.timeRemaining = state.timerDuration;
     state.status = 'LIVE';
     state.previousState = null;
 
     io.to(tournamentId).emit('auction:next', { player, state: sanitizeState(state) });
-    io.to(tournamentId).emit('bid:log', { message: `🔄 ${player.name} reopened for bidding`, type: 'system' });
+    io.to(tournamentId).emit('bid:log', { message: `🔄 ${player.name} reopened for bidding`, type: 'system', category: state.activeCategory });
     startTimer(tournamentId, io, handleTimerExpiry);
 
     const stats = await getCategoryStats(tournamentId);
@@ -573,6 +649,7 @@ async function endAuction(tournamentId, io) {
         stopTimer(tournamentId);
         state.status = 'FINISHED';
         io.to(tournamentId).emit('auction:state', sanitizeState(state));
+        clearState(tournamentId); // Full memory cleanup
     }
     await Tournament.findByIdAndUpdate(tournamentId, { status: 'FINISHED' });
     io.to(tournamentId).emit('auction:ended', { message: 'Auction ended by admin' });

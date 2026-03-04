@@ -18,7 +18,7 @@ export default function Navbar() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '60px' }}>
 
                     {/* Logo */}
-                    <Link to={user ? '/dashboard' : '/'} style={{
+                    <Link to={user ? (user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard') : '/'} style={{
                         display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none',
                     }}>
                         <div style={{
@@ -33,11 +33,11 @@ export default function Navbar() {
                     {/* Nav Links (logged in) */}
                     {user && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Link to="/dashboard" style={{
+                            <Link to={user?.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard'} style={{
                                 padding: '6px 14px', borderRadius: '8px', textDecoration: 'none',
                                 fontSize: '0.875rem', fontWeight: 500, transition: 'all 0.2s',
-                                background: isActive('/dashboard') ? 'rgba(5,150,105,0.15)' : 'transparent',
-                                color: isActive('/dashboard') ? '#34d399' : '#9ca3af',
+                                background: (isActive('/dashboard') || isActive('/admin/dashboard')) ? 'rgba(5,150,105,0.15)' : 'transparent',
+                                color: (isActive('/dashboard') || isActive('/admin/dashboard')) ? '#34d399' : '#9ca3af',
                             }}>
                                 🏟️ Tournaments
                             </Link>

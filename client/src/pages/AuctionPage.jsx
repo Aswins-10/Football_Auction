@@ -227,6 +227,7 @@ export default function AuctionPage() {
                         availablePlayers={categoryPlayers.available}
                         unsoldPlayers={categoryPlayers.unsold}
                         auctionState={auctionState}
+                        timeRemaining={timeRemaining}
                         onBack={() => setSelectedCategory(null)}
                         onSelectPlayer={handleSelectPlayer}
                         onReintroduceUnsold={handleReintroduceUnsold}
@@ -250,14 +251,16 @@ export default function AuctionPage() {
             {!isFinished && user?.role === 'TEAM_OWNER' && (
                 <TeamBidView
                     auctionState={auctionState}
+                    setAuctionState={setAuctionState}
+                    socketRef={socketRef}
                     myTeam={myTeam}
                     allTeams={allTeams}
+                    tournamentId={tournamentId}
                     timeRemaining={timeRemaining}
                     soldNotif={soldNotif}
                     unsoldNotif={unsoldNotif}
                     rejectionMsg={rejectionMsg}
                     bidLogs={bidLogs}
-                    onBid={handleBid}
                     onQuit={handleQuit}
                     categoryPlayers={categoryPlayers}
                     activeCategory={auctionState?.activeCategory}

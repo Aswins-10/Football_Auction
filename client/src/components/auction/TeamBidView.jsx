@@ -18,9 +18,9 @@ const CAT_ICONS = {
 };
 
 export default function TeamBidView({
-    auctionState, myTeam, allTeams, timeRemaining,
+    auctionState, setAuctionState, socketRef, tournamentId, myTeam, allTeams, timeRemaining,
     soldNotif, unsoldNotif, rejectionMsg, bidLogs,
-    onBid, onQuit,
+    onQuit,
     categoryPlayers,  // { available, unsold } for the active category
     activeCategory,   // string e.g. 'CF'
 }) {
@@ -29,6 +29,30 @@ export default function TeamBidView({
     const status = auctionState?.status;
     const isLive = status === 'LIVE';
     const isPaused = status === 'PAUSED';
+
+    const handleBid = (e) => {
+        e.preventDefault();
+        if (auctionState?.status !== 'LIVE' || auctionState?.currentLeaderTeamId === myTeam?._id) return;
+
+        // OPTIMISTIC UI UPDATE
+        const increment = getIncrement(auctionState.currentPrice);
+        const nextPrice = +(auctionState.currentPrice + increment).toFixed(1);
+        const originalState = { ...auctionState };
+
+        setAuctionState(prev => ({
+            ...prev,
+            currentPrice: nextPrice,
+            currentLeaderTeamId: myTeam?._id,
+        }));
+
+        // Send real request
+        socketRef.current?.emit('bid:place', { tournamentId, teamId: myTeam?._id }, (res) => {
+            if (res && !res.success) {
+                // Revert optimistic update if server rejected
+                setAuctionState(originalState);
+            }
+        });
+    };
     const currentPlayer = auctionState?.currentPlayer;
     const currentPrice = auctionState?.currentPrice || 0;
     const leaderTeam = allTeams.find(t => t._id === auctionState?.currentLeaderTeamId);
@@ -279,7 +303,7 @@ export default function TeamBidView({
                         {myTeam && (
                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
                                 <button
-                                    onClick={onBid}
+                                    onClick={handleBid}
                                     disabled={!canBid}
                                     style={{
                                         padding: '18px',

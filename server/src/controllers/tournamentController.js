@@ -1,5 +1,6 @@
 const Tournament = require('../models/Tournament');
 const Team = require('../models/Team');
+const Player = require('../models/Player');
 
 const createTournament = async (req, res) => {
     try {
@@ -59,4 +60,20 @@ const updateTournament = async (req, res) => {
     }
 };
 
-module.exports = { createTournament, getTournaments, getTournament, updateTournament };
+// Cascade delete: players → teams → tournament
+const deleteTournament = async (req, res) => {
+    try {
+        const tournament = await Tournament.findById(req.params.id);
+        if (!tournament) return res.status(404).json({ message: 'Tournament not found' });
+
+        await Player.deleteMany({ tournamentId: req.params.id });
+        await Team.deleteMany({ tournamentId: req.params.id });
+        await Tournament.findByIdAndDelete(req.params.id);
+
+        res.json({ message: 'Tournament deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+module.exports = { createTournament, getTournaments, getTournament, updateTournament, deleteTournament };

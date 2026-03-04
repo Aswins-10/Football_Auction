@@ -11,7 +11,7 @@ import AuctionPage from './pages/AuctionPage';
 import TeamPage from './pages/TeamPage';
 import AdminLoginPage from './pages/AdminLoginPage';
 
-// Layout with navbar — used by all public/user routes
+// Layout with navbar — used by all pages
 function MainLayout() {
   return (
     <div style={{ minHeight: '100vh', background: '#0a0f1e' }}>
@@ -27,6 +27,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* Admin portal — no navbar, completely isolated */}
+          <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
 
           {/* All other pages share the Navbar via MainLayout */}
@@ -34,9 +35,17 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+
+            {/* Team-owner dashboard — admins get redirected away to /admin/dashboard */}
             <Route path="/dashboard" element={
-              <ProtectedRoute><DashboardPage /></ProtectedRoute>
+              <ProtectedRoute role="TEAM_OWNER"><DashboardPage /></ProtectedRoute>
             } />
+
+            {/* Admin dashboard — same component, admins only */}
+            <Route path="/admin/dashboard" element={
+              <ProtectedRoute role="ADMIN"><DashboardPage /></ProtectedRoute>
+            } />
+
             <Route path="/tournament/:id" element={
               <ProtectedRoute><TournamentPage /></ProtectedRoute>
             } />

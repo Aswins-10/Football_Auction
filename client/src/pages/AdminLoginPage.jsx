@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
                 setLoading(false);
                 return;
             }
-            navigate('/dashboard');
+            navigate('/admin/dashboard');
         } catch (err) {
             setError(err.response?.data?.message || 'Something went wrong. Try again.');
         } finally {

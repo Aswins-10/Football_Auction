@@ -66,16 +66,17 @@ export default function TeamsTab({ tournament, user }) {
         }
     };
 
-    const handleAddBudget = async (teamId) => {
-        const amount = parseFloat(budgetInputs[teamId]);
-        if (!amount || amount <= 0) { notify('❌ Enter a valid amount'); return; }
+    const handleAddBudget = async (teamId, isDecrease = false) => {
+        const raw = parseFloat(budgetInputs[teamId]);
+        if (!raw || isNaN(raw) || raw <= 0) { notify('❌ Enter a valid positive amount'); return; }
+        const amount = isDecrease ? -raw : raw;
         try {
             await api.put(`/tournaments/${tournament._id}/teams/${teamId}/budget`, { amount });
             setBudgetInputs(prev => ({ ...prev, [teamId]: '' }));
             fetchTeams();
-            notify(`✅ Added ${amount}M to team budget`);
+            notify(isDecrease ? `✅ Deducted ${raw}M from team budget` : `✅ Added ${raw}M to team budget`);
         } catch (err) {
-            notify('❌ ' + (err.response?.data?.message || 'Error adding budget'));
+            notify('❌ ' + (err.response?.data?.message || 'Error updating budget'));
         }
     };
 
@@ -281,18 +282,30 @@ export default function TeamsTab({ tournament, user }) {
                                     </div>
                                 )}
 
-                                {/* Admin budget top-up */}
+                                {/* Admin budget control */}
                                 {user?.role === 'ADMIN' && isAssigned && (
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                        <input
-                                            type="number" min="1" placeholder="Add budget (M)"
-                                            value={budgetInputs[team._id] || ''}
-                                            onChange={e => setBudgetInputs(prev => ({ ...prev, [team._id]: e.target.value }))}
-                                            style={{ flex: 1, padding: '7px 10px', borderRadius: '8px', background: 'rgba(31,41,55,0.8)', border: '1px solid rgba(75,85,99,0.4)', color: '#f9fafb', fontSize: '0.8rem', outline: 'none', fontFamily: 'Inter, sans-serif' }}
-                                            onFocus={e => e.target.style.borderColor = '#059669'}
-                                            onBlur={e => e.target.style.borderColor = 'rgba(75,85,99,0.4)'}
-                                        />
-                                        <button onClick={() => handleAddBudget(team._id)} style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', background: 'rgba(5,150,105,0.15)', color: '#34d399', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', border: '1px solid rgba(5,150,105,0.3)' }}>+ Add</button>
+                                    <div>
+                                        <p style={{ fontSize: '0.7rem', color: '#9ca3af', margin: '0 0 5px', fontWeight: 600 }}>💰 Adjust Budget</p>
+                                        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                                            <input
+                                                type="number" min="1" placeholder="Amount (M)"
+                                                value={budgetInputs[team._id] || ''}
+                                                onChange={e => setBudgetInputs(prev => ({ ...prev, [team._id]: e.target.value }))}
+                                                style={{ flex: 1, padding: '7px 10px', borderRadius: '8px', background: 'rgba(31,41,55,0.8)', border: '1px solid rgba(75,85,99,0.4)', color: '#f9fafb', fontSize: '0.8rem', outline: 'none', fontFamily: 'Inter, sans-serif' }}
+                                                onFocus={e => e.target.style.borderColor = '#059669'}
+                                                onBlur={e => e.target.style.borderColor = 'rgba(75,85,99,0.4)'}
+                                            />
+                                            <button
+                                                onClick={() => handleAddBudget(team._id, false)}
+                                                title="Add budget"
+                                                style={{ padding: '7px 11px', borderRadius: '8px', border: '1px solid rgba(5,150,105,0.35)', background: 'rgba(5,150,105,0.12)', color: '#34d399', fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}
+                                            >+</button>
+                                            <button
+                                                onClick={() => handleAddBudget(team._id, true)}
+                                                title="Deduct budget"
+                                                style={{ padding: '7px 11px', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.10)', color: '#f87171', fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer' }}
+                                            >−</button>
+                                        </div>
                                     </div>
                                 )}
                                 {user?.role === 'TEAM_OWNER' && myTeam && !isMine && isAvailable && (

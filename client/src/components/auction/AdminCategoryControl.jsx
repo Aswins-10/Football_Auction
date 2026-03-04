@@ -9,8 +9,9 @@ const LOG_COLOR = { bid: '#34d399', sold: '#fbbf24', unsold: '#9ca3af', system: 
 
 export default function AdminCategoryControl({
     category, availablePlayers, unsoldPlayers, auctionState,
+    timeRemaining,
     onBack, onSelectPlayer, onReintroduceUnsold,
-    onPause, onResume, onSkip, onReopen, bidLogs,
+    onPause, onResume, onSkip, onReopen, onEnd, bidLogs,
 }) {
     const [selectedAvailable, setSelectedAvailable] = useState('');
     const [selectedUnsold, setSelectedUnsold] = useState('');
@@ -23,6 +24,17 @@ export default function AdminCategoryControl({
     const isWaiting = !status || ['WAITING', 'SOLD', 'UNSOLD'].includes(status);
     const canReintroduce = availablePlayers.length === 0 && unsoldPlayers.length > 0;
     const currentPlayer = auctionState?.currentPlayer;
+    const timerDuration = auctionState?.timerDuration || 30;
+
+    // Timer ring helpers
+    const radius = 20;
+    const circ = 2 * Math.PI * radius;
+    const progress = isLive ? Math.max(0, timeRemaining / timerDuration) : isPaused ? Math.max(0, timeRemaining / timerDuration) : 1;
+    const dashOffset = circ * (1 - progress);
+    const timerColor = timeRemaining <= 5 ? '#ef4444' : timeRemaining <= 10 ? '#f59e0b' : '#34d399';
+
+    // Filter logs to current category (+ system logs from this category)
+    const filteredLogs = bidLogs.filter(l => !l.category || l.category === category);
 
     const btn = (extra = {}) => ({
         padding: '10px 20px', borderRadius: '12px', fontWeight: 700,
@@ -90,6 +102,28 @@ export default function AdminCategoryControl({
                                     <span style={{ color: '#6b7280', fontSize: '0.75rem' }}>Base: {currentPlayer.basePrice}M</span>
                                 </div>
                             </div>
+                            {/* Timer Ring */}
+                            {(isLive || isPaused) && (
+                                <div style={{ position: 'relative', width: '52px', height: '52px', flexShrink: 0 }}>
+                                    <svg width="52" height="52" style={{ transform: 'rotate(-90deg)' }}>
+                                        <circle cx="26" cy="26" r={radius} fill="none" stroke="rgba(55,65,81,0.5)" strokeWidth="4" />
+                                        <circle
+                                            cx="26" cy="26" r={radius} fill="none"
+                                            stroke={timerColor}
+                                            strokeWidth="4"
+                                            strokeDasharray={circ}
+                                            strokeDashoffset={dashOffset}
+                                            strokeLinecap="round"
+                                            style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s' }}
+                                        />
+                                    </svg>
+                                    <div style={{
+                                        position: 'absolute', inset: 0, display: 'flex',
+                                        alignItems: 'center', justifyContent: 'center',
+                                        fontSize: '0.9rem', fontWeight: 900, color: timerColor,
+                                    }}>{timeRemaining}</div>
+                                </div>
+                            )}
                             <div style={{ textAlign: 'right' }}>
                                 <p style={{ fontSize: '1.625rem', fontWeight: 900, color: '#f9fafb', margin: 0, lineHeight: 1 }}>{auctionState.currentPrice}M</p>
                                 <p style={{ fontSize: '0.65rem', color: '#6b7280', margin: '2px 0 0' }}>Current Price</p>
@@ -250,16 +284,18 @@ export default function AdminCategoryControl({
                     </div>
                 </div>
 
-                {/* Live Feed */}
+                {/* Live Feed — filtered by category */}
                 <div style={{
                     background: 'rgba(17,24,39,0.9)', border: '1px solid rgba(55,65,81,0.4)',
                     borderRadius: '16px', padding: '16px', maxHeight: '380px', overflowY: 'auto',
                 }}>
-                    <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>📋 Activity Log</p>
-                    {bidLogs.length === 0 ? (
-                        <p style={{ color: '#374151', fontSize: '0.8rem' }}>No activity yet</p>
+                    <p style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        📋 {category} Activity
+                    </p>
+                    {filteredLogs.length === 0 ? (
+                        <p style={{ color: '#374151', fontSize: '0.8rem' }}>No activity yet for {category}</p>
                     ) : (
-                        [...bidLogs].reverse().map((log, i) => (
+                        [...filteredLogs].reverse().map((log, i) => (
                             <div key={i} style={{ padding: '6px 0', borderBottom: '1px solid rgba(31,41,55,0.5)' }}>
                                 <span style={{ fontSize: '0.775rem', color: LOG_COLOR[log.type] || '#9ca3af', lineHeight: 1.5 }}>{log.message}</span>
                             </div>

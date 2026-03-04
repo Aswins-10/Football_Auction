@@ -1,11 +1,13 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const tournamentRoutes = require('./routes/tournaments');
 const teamRoutes = require('./routes/teams');
 const playerRoutes = require('./routes/players');
+const playerSearchRoute = require('./routes/playerSearch');
 
 const app = express();
 
@@ -14,12 +16,14 @@ app.use(cors({
     credentials: true,
 }));
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/tournaments/:tournamentId/teams', teamRoutes);
 app.use('/api/tournaments/:tournamentId/players', playerRoutes);
+app.use('/api/player-search', playerSearchRoute);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
