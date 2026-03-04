@@ -477,7 +477,7 @@ export default function PlayersTab({ tournament, user }) {
                 </div>
             ) : (
                 <>
-                    <div style={{
+                    <div className="player-grid" style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
                         gap: '14px',
@@ -498,12 +498,19 @@ export default function PlayersTab({ tournament, user }) {
                                     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; e.currentTarget.style.borderColor = 'rgba(55,65,81,0.4)'; }}
                                 >
                                     {/* Image area */}
-                                    <div style={{ position: 'relative', background: 'linear-gradient(135deg, #1f2937, #111827)', aspectRatio: '4/3' }}>
+                                    <div style={{ position: 'relative', background: 'linear-gradient(135deg, #1f2937, #111827)', aspectRatio: '4/3', overflow: 'hidden' }}>
                                         {imgSrc ? (
-                                            <img src={imgSrc} alt={p.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
-                                                onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                                            />
+                                            <>
+                                                {/* Skeleton shown while loading */}
+                                                <div className="img-skeleton" style={{ position: 'absolute', inset: 0 }} />
+                                                <img src={imgSrc} alt={p.name}
+                                                    loading="lazy"
+                                                    className="lazy-img"
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', position: 'relative', zIndex: 1 }}
+                                                    onLoad={e => e.target.classList.add('loaded')}
+                                                    onError={e => { e.target.style.display = 'none'; }}
+                                                />
+                                            </>
                                         ) : null}
                                         <div style={{
                                             display: imgSrc ? 'none' : 'flex',

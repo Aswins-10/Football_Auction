@@ -35,7 +35,7 @@ export default function AdminCategoryGrid({ stats, onSelect, activeCategory }) {
                 </p>
             </div>
 
-            <div style={{
+            <div className="category-grid" style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
                 gap: '16px',

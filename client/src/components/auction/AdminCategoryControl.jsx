@@ -43,7 +43,7 @@ export default function AdminCategoryControl({
     });
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px', alignItems: 'start' }}>
+        <div className="grid-auction-admin">
 
             {/* ── LEFT MAIN PANEL ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -94,7 +94,13 @@ export default function AdminCategoryControl({
                                 width: '56px', height: '56px', borderRadius: '14px', flexShrink: 0,
                                 background: 'rgba(99,102,241,0.15)', border: '2px solid rgba(99,102,241,0.3)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem',
-                            }}>⚽</div>
+                                overflow: 'hidden',
+                            }}>
+                                {currentPlayer.photo
+                                    ? <img src={currentPlayer.photo} alt={currentPlayer.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => e.target.style.display = 'none'} />
+                                    : '⚽'
+                                }
+                            </div>
                             <div style={{ flex: 1 }}>
                                 <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#f9fafb', margin: '0 0 4px' }}>{currentPlayer.name}</h3>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>

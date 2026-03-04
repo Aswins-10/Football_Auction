@@ -314,3 +314,187 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* ── Image skeleton shimmer ──────────────────────────────────────────────── */
+.img-skeleton {
+  background: linear-gradient(90deg,
+      rgba(31, 41, 55, 0.8) 25%,
+      rgba(55, 65, 81, 0.6) 50%,
+      rgba(31, 41, 55, 0.8) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+.lazy-img {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.lazy-img.loaded {
+  opacity: 1;
+}
+
+/* ── Responsive utilities ────────────────────────────────────────────────── */
+.hide-mobile {
+  display: block;
+}
+
+.show-mobile {
+  display: none;
+}
+
+/* ── Responsive grids ───────────────────────────────────────────────────── */
+.responsive-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  align-items: start;
+}
+
+.grid-auction-admin {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ── Mobile navbar ───────────────────────────────────────────────────────── */
+.nav-mobile-menu {
+  display: none;
+  flex-direction: column;
+  background: rgba(10, 15, 30, 0.98);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 16px;
+  gap: 8px;
+}
+
+.hamburger-btn {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.hamburger-btn span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: #9ca3af;
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+
+/* ── Breakpoints ─────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+
+  .show-mobile {
+    display: flex !important;
+  }
+
+  .hamburger-btn {
+    display: flex;
+  }
+
+  .nav-mobile-menu.open {
+    display: flex;
+  }
+
+  .responsive-page {
+    padding: 16px 12px;
+  }
+
+  /* Two-col auction layouts become single col */
+  .grid-2col,
+  .grid-auction-admin {
+    grid-template-columns: 1fr;
+  }
+
+  /* Player cards grid stays 2-col on mobile */
+  .player-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Tournament tab strip scrolls horizontally */
+  .tab-strip {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Team grid: 1 col on mobile */
+  .teams-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Modals fill screen */
+  .modal-overlay {
+    align-items: flex-end;
+  }
+
+  .modal-box {
+    border-radius: 20px 20px 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Admin category grid: 2 cols */
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Auction page top bar */
+  .auction-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  /* Bid view stack */
+  .bid-main {
+    padding: 16px !important;
+  }
+
+  .bid-price {
+    font-size: 2rem !important;
+  }
+
+  /* Hide the sticky team sidebar on mobile — show inline below main */
+  .team-sidebar-desktop {
+    display: none !important;
+  }
+
+  .team-sidebar-mobile {
+    display: block !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .player-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .category-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}

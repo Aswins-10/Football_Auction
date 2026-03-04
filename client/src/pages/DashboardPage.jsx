@@ -55,12 +55,12 @@ export default function DashboardPage() {
     };
 
     return (
-        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '36px 24px' }}>
+        <div className="responsive-page">
 
             {/* Page header */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                    <h1 style={{ fontSize: '1.875rem', fontWeight: 900, color: '#f9fafb', margin: 0 }}>
+                    <h1 style={{ fontSize: 'clamp(1.3rem, 4vw, 1.875rem)', fontWeight: 900, color: '#f9fafb', margin: 0 }}>
                         {user?.role === 'ADMIN' ? '⚙️ Admin Dashboard' : '🏟️ Tournaments'}
                     </h1>
                     <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '6px' }}>
