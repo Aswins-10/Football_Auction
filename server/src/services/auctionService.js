@@ -69,6 +69,51 @@ function sanitizeState(state) {
     return clean;
 }
 
+// ── State Persistence (Free Tier Safety) ───────────────────────────────────────
+
+async function saveStateToDB(tournamentId) {
+    const s = getState(tournamentId);
+    if (!s) return;
+    try {
+        await Tournament.findByIdAndUpdate(tournamentId, { auctionState: sanitizeState(s) });
+    } catch (err) {
+        console.error(`[AuctionService] Failed to save DB state for ${tournamentId}:`, err);
+    }
+}
+
+async function restoreStatesOnBoot() {
+    try {
+        const activeTournaments = await Tournament.find({
+            status: { $in: ['LIVE', 'PAUSED'] },
+            auctionState: { $ne: null }
+        });
+
+        for (const t of activeTournaments) {
+            const s = t.auctionState;
+            // Clean transient fields
+            s.bidBuffer = [];
+            s.teamLastBidTime = {};
+            s._timerHandle = null;
+            s._tickInterval = null;
+
+            // If server crashed during LIVE auction, fallback to PAUSED 
+            // so admin can resume safely without losing timer/context
+            if (s.status === 'LIVE') {
+                s.status = 'PAUSED';
+            }
+
+            setState(t._id.toString(), s);
+            console.log(`[AuctionService] Restored auction state for tournament: ${t.name || t._id}`);
+        }
+    } catch (err) {
+        console.error('[AuctionService] Boot restore error:', err);
+    }
+}
+
+// Fire on require
+setTimeout(restoreStatesOnBoot, 2000);
+
+
 function makeInitialState(tournament) {
     return {
         tournamentId: tournament._id.toString(),
@@ -239,6 +284,8 @@ async function soldPlayer(tournamentId, io, teamId, price) {
         const stats = await getCategoryStats(tournamentId);
         io.to(tournamentId).emit('auction:category_stats', stats);
 
+        saveStateToDB(tournamentId);
+
         // After 5s go back to WAITING
         setTimeout(() => {
             const s = getState(tournamentId);
@@ -249,6 +296,8 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             s.currentPrice = 0;
             s.currentLeaderTeamId = null;
             s.bidBuffer = [];
+
+            saveStateToDB(tournamentId);
             io.to(tournamentId).emit('auction:state', sanitizeState(s));
         }, 5000);
 
@@ -288,6 +337,8 @@ async function unsoldPlayer(tournamentId, io) {
         const stats = await getCategoryStats(tournamentId);
         io.to(tournamentId).emit('auction:category_stats', stats);
 
+        saveStateToDB(tournamentId);
+
         setTimeout(() => {
             const s = getState(tournamentId);
             if (!s || s.status !== 'UNSOLD') return;
@@ -296,6 +347,8 @@ async function unsoldPlayer(tournamentId, io) {
             s.currentPlayer = null;
             s.currentPrice = 0;
             s.currentLeaderTeamId = null;
+
+            saveStateToDB(tournamentId);
             io.to(tournamentId).emit('auction:state', sanitizeState(s));
         }, 5000);
 
@@ -358,6 +411,8 @@ async function selectPlayer(tournamentId, playerId, io) {
         type: 'system',
         category: state.activeCategory,
     });
+
+    saveStateToDB(tournamentId);
     startTimer(tournamentId, io, handleTimerExpiry);
     return { success: true };
 }
@@ -506,6 +561,7 @@ async function placeBid(tournamentId, teamId, io) {
             currentLeaderTeamId: teamId.toString(),
         });
 
+        saveStateToDB(tournamentId);
         startTimer(tournamentId, io, handleTimerExpiry);
 
         await checkAutoSell(tournamentId, io);
@@ -573,6 +629,8 @@ async function quitBidding(tournamentId, teamId, io) {
         currentLeaderTeamId: state.currentLeaderTeamId,
         quitMap: state.quitMap,
     });
+
+    saveStateToDB(tournamentId);
     await checkAutoSell(tournamentId, io);
     return { success: true };
 

@@ -158,7 +158,7 @@ export default function TournamentPage() {
                         <button key={tab.id}
                             onClick={() => tab.isAction ? navigate(`/tournament/${id}/auction`) : setActiveTab(tab.id)}
                             style={{
-                                flex: 1, padding: '10px 8px', borderRadius: '10px', border: 'none',
+                                flex: 1, padding: '10px 8px', borderRadius: '10px',
                                 cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, transition: 'all 0.2s',
                                 fontFamily: 'Inter, sans-serif',
                                 background: isActive && !isAuction
@@ -168,6 +168,7 @@ export default function TournamentPage() {
                                         : 'transparent',
                                 color: isActive && !isAuction ? '#fff' : isAuction ? '#f59e0b' : '#9ca3af',
                                 border: isAuction ? '1px solid rgba(245,158,11,0.25)' : 'none',
+                                position: 'relative'
                             }}
                             onMouseEnter={e => { if (!isActive || isAuction) e.currentTarget.style.color = '#f9fafb'; }}
                             onMouseLeave={e => { if (!isActive || isAuction) e.currentTarget.style.color = isAuction ? '#f59e0b' : '#9ca3af'; }}

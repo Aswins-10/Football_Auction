@@ -24,7 +24,7 @@ app.use(cors({
     credentials: true,
 }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Static uploads directory removed — using Cloudinary
 
 // Routes
 app.use('/api/auth', authRoutes);

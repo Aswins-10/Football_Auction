@@ -65,9 +65,25 @@ router.get('/', async (req, res) => {
     // Refresh cache if stale
     if (!cachedTeams.length || Date.now() - cacheTimestamp > CACHE_TTL_MS) {
         console.log('[TeamSearch] Refreshing club cache from TheSportsDB...');
-        cachedTeams = await fetchAllClubs();
-        cacheTimestamp = Date.now();
-        console.log(`[TeamSearch] Cached ${cachedTeams.length} clubs.`);
+        try {
+            const freshClubs = await fetchAllClubs();
+
+            if (freshClubs.length > 0) {
+                cachedTeams = freshClubs;
+                cacheTimestamp = Date.now();
+                console.log(`[TeamSearch] Cached ${cachedTeams.length} clubs.`);
+            } else if (cachedTeams.length > 0) {
+                console.warn('[TeamSearch] Upstream API returned 0 results. Falling back to stale cache.');
+                cacheTimestamp = Date.now(); // Reset TTL to prevent immediate spamming
+            }
+        } catch (err) {
+            console.error('[TeamSearch] Critical TheSportsDB fetch error:', err.message);
+            if (cachedTeams.length > 0) {
+                console.warn('[TeamSearch] Falling back to stale cache due to network error.');
+                cacheTimestamp = Date.now();
+            }
+            // If no cache exists yet, we just serve an empty array this time
+        }
     }
 
     const filtered = cachedTeams

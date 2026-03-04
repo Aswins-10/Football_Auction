@@ -11,6 +11,7 @@ const tournamentSchema = new mongoose.Schema({
         enum: ['UPCOMING', 'LIVE', 'FINISHED'],
         default: 'UPCOMING',
     },
+    auctionState: { type: Object, default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
 

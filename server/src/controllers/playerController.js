@@ -49,8 +49,8 @@ const deletePlayer = async (req, res) => {
 const uploadPlayerImage = async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-        // Return the public URL path
-        const url = `/uploads/players/${req.file.filename}`;
+        // Return the Cloudinary public URL path
+        const url = req.file.path;
         res.json({ url });
     } catch (err) {
         res.status(500).json({ message: err.message });
