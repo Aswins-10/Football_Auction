@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 
@@ -11,6 +11,12 @@ export default function TeamsTab({ tournament, user }) {
     const [formError, setFormError] = useState('');
     const [actionMsg, setActionMsg] = useState('');
     const [budgetInputs, setBudgetInputs] = useState({}); // teamId -> amount string
+
+    // Team name autocomplete
+    const [teamSuggestions, setTeamSuggestions] = useState([]);
+    const [isTeamSearching, setIsTeamSearching] = useState(false);
+    const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+    const teamSearchTimeout = useRef(null);
 
     const fetchTeams = async () => {
         try {
@@ -28,6 +34,26 @@ export default function TeamsTab({ tournament, user }) {
 
     useEffect(() => { fetchTeams(); }, [tournament._id]);
 
+    // Team name autocomplete effect
+    useEffect(() => {
+        if (!showTeamDropdown || form.name.length < 2) { setTeamSuggestions([]); return; }
+        if (teamSearchTimeout.current) clearTimeout(teamSearchTimeout.current);
+        teamSearchTimeout.current = setTimeout(async () => {
+            setIsTeamSearching(true);
+            try {
+                const { data } = await api.get(`/team-search?q=${encodeURIComponent(form.name)}`);
+                setTeamSuggestions(data);
+            } catch { setTeamSuggestions([]); }
+            setIsTeamSearching(false);
+        }, 400);
+        return () => clearTimeout(teamSearchTimeout.current);
+    }, [form.name, showTeamDropdown]);
+
+    const handleSelectTeam = (result) => {
+        setForm({ name: result.name, logo: result.logo || '' });
+        setShowTeamDropdown(false);
+    };
+
     const notify = (msg, isError = false) => {
         setActionMsg(msg);
         setTimeout(() => setActionMsg(''), 3500);
@@ -40,6 +66,7 @@ export default function TeamsTab({ tournament, user }) {
             await api.post(`/tournaments/${tournament._id}/teams`, form);
             setShowCreate(false);
             setForm({ name: '', logo: '' });
+            setShowTeamDropdown(false);
             fetchTeams();
         } catch (err) {
             setFormError(err.response?.data?.message || 'Error creating team');
@@ -337,23 +364,75 @@ export default function TeamsTab({ tournament, user }) {
                             </div>
                         )}
                         <form onSubmit={handleCreateTeam}>
-                            <div style={{ marginBottom: '16px' }}>
+                            {/* Team Name with autocomplete */}
+                            <div style={{ marginBottom: '16px', position: 'relative' }}>
                                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', marginBottom: '6px' }}>Team Name</label>
-                                <input placeholder="Manchester City" required value={form.name}
-                                    onChange={e => setForm({ ...form, name: e.target.value })}
+                                <input
+                                    placeholder="Manchester City" required value={form.name}
+                                    onChange={e => { setForm({ ...form, name: e.target.value }); setShowTeamDropdown(true); }}
+                                    onFocus={() => { if (form.name.length >= 2) setShowTeamDropdown(true); }}
                                     style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', boxSizing: 'border-box', background: 'rgba(31,41,55,0.8)', border: '1px solid rgba(75,85,99,0.5)', color: '#f9fafb', fontSize: '0.9rem', outline: 'none', fontFamily: 'Inter, sans-serif' }}
-                                    onFocus={e => e.target.style.borderColor = '#059669'}
-                                    onBlur={e => e.target.style.borderColor = 'rgba(75,85,99,0.5)'}
                                 />
+                                {showTeamDropdown && form.name.length >= 2 && (
+                                    <div style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px',
+                                        background: 'rgba(17,24,39,0.98)', border: '1px solid rgba(75,85,99,0.5)',
+                                        borderRadius: '10px', overflow: 'hidden', zIndex: 110,
+                                        boxShadow: '0 10px 25px rgba(0,0,0,0.6)'
+                                    }}>
+                                        {isTeamSearching ? (
+                                            <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280', fontSize: '0.8rem' }}>Searching...</div>
+                                        ) : teamSuggestions.length === 0 ? (
+                                            <div style={{ padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>No clubs found.</span>
+                                                <button type="button" onClick={() => setShowTeamDropdown(false)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.7rem', cursor: 'pointer' }}>Close</button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(75,85,99,0.3)' }}>
+                                                    <span style={{ fontSize: '0.65rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Suggestions</span>
+                                                    <button type="button" onClick={() => setShowTeamDropdown(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '0.9rem', cursor: 'pointer' }}>✕</button>
+                                                </div>
+                                                <div style={{ maxHeight: '210px', overflowY: 'auto' }}>
+                                                    {teamSuggestions.map((t, i) => (
+                                                        <div key={i} onClick={() => handleSelectTeam(t)} style={{
+                                                            display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
+                                                            borderBottom: '1px solid rgba(75,85,99,0.2)', cursor: 'pointer', transition: 'background 0.2s'
+                                                        }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(75,85,99,0.3)'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                        >
+                                                            {t.logo ? (
+                                                                <img src={t.logo} alt={t.name} style={{ width: '28px', height: '28px', objectFit: 'contain', flexShrink: 0 }}
+                                                                    onError={e => e.target.style.display = 'none'} />
+                                                            ) : (
+                                                                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>🛡️</div>
+                                                            )}
+                                                            <div>
+                                                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f9fafb' }}>{t.name}</div>
+                                                                <div style={{ fontSize: '0.65rem', color: '#9ca3af' }}>{t.league} · {t.country}</div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
+                            {/* Logo URL with live preview */}
                             <div style={{ marginBottom: '24px' }}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', marginBottom: '6px' }}>Logo URL (optional)</label>
-                                <input placeholder="https://..." value={form.logo}
-                                    onChange={e => setForm({ ...form, logo: e.target.value })}
-                                    style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', boxSizing: 'border-box', background: 'rgba(31,41,55,0.8)', border: '1px solid rgba(75,85,99,0.5)', color: '#f9fafb', fontSize: '0.9rem', outline: 'none', fontFamily: 'Inter, sans-serif' }}
-                                    onFocus={e => e.target.style.borderColor = '#059669'}
-                                    onBlur={e => e.target.style.borderColor = 'rgba(75,85,99,0.5)'}
-                                />
+                                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', marginBottom: '6px' }}>Logo URL (auto-filled or manual)</label>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                    <input placeholder="https://..." value={form.logo}
+                                        onChange={e => setForm({ ...form, logo: e.target.value })}
+                                        style={{ flex: 1, padding: '10px 14px', borderRadius: '10px', boxSizing: 'border-box', background: 'rgba(31,41,55,0.8)', border: '1px solid rgba(75,85,99,0.5)', color: '#f9fafb', fontSize: '0.9rem', outline: 'none', fontFamily: 'Inter, sans-serif' }}
+                                    />
+                                    {form.logo && (
+                                        <img src={form.logo} alt="preview" style={{ width: '36px', height: '36px', objectFit: 'contain', flexShrink: 0 }}
+                                            onError={e => e.target.style.display = 'none'} />
+                                    )}
+                                </div>
                             </div>
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <button type="submit" style={{ flex: 1, padding: '11px', borderRadius: '10px', border: 'none', background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>

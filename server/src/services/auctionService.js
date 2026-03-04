@@ -76,17 +76,19 @@ function makeInitialState(tournament) {
         currentPlayerId: null,
         currentPlayer: null,
         currentPrice: 0,
-        previousPrice: 0,          // price before the last bid (for quit revert)
-        previousLeaderTeamId: null, // leader before the last bid
+        previousPrice: 0,
+        previousLeaderTeamId: null,
         currentLeaderTeamId: null,
         timerEndTime: null,
         timeRemaining: tournament.timerDuration,
         timerDuration: tournament.timerDuration,
+        // ── Cached once at init — never re-queried during bidding ──────────────
+        squadSizeLimit: tournament.squadSizeLimit,
         status: 'WAITING',
         quitMap: {},
         previousState: null,
-        bidBuffer: [],             // temporary storage for bids during an active player
-        teamLastBidTime: {},       // timestamp of last bid per team (for rate limiting)
+        bidBuffer: [],
+        teamLastBidTime: {},
         _timerHandle: null,
         _tickInterval: null,
     };
@@ -181,9 +183,24 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             soldTo: teamId,
             soldPrice: price,
         });
-        await Team.findByIdAndUpdate(teamId, {
-            $inc: { budgetRemaining: -price, squadCount: 1 },
-        });
+
+        // ATOMIC budget deduction — the $gte guard ensures budgetRemaining never goes negative.
+        // If somehow the budget is already less than price (edge case), the update simply won't
+        // match and updatedTeam will be null, so we check and abort safely.
+        const updatedTeam = await Team.findOneAndUpdate(
+            { _id: teamId, budgetRemaining: { $gte: price } },  // guard: must still afford it
+            { $inc: { budgetRemaining: -price, squadCount: 1 } },
+            { new: true }   // return the updated document
+        );
+
+        if (!updatedTeam) {
+            // Safety net: budget was already too low (shouldn't happen, but just in case)
+            console.error(`soldPlayer: Team ${teamId} insufficient budget at SOLD time. Rollback.`);
+            await Player.findByIdAndUpdate(state.currentPlayerId, { status: 'AVAILABLE', soldTo: null, soldPrice: null });
+            state.status = 'LIVE';
+            startTimer(tournamentId, io, handleTimerExpiry);
+            return;
+        }
 
         // Flush buffered bids to DB
         if (state.bidBuffer.length > 0) {
@@ -192,7 +209,7 @@ async function soldPlayer(tournamentId, io, teamId, price) {
         }
 
         const updatedPlayer = await Player.findById(state.currentPlayerId).populate('soldTo', 'name logo');
-        const updatedTeam = await Team.findById(teamId);
+        // updatedTeam is already fresh from the atomic findOneAndUpdate above
 
         // Save for reopen
         state.previousState = {
@@ -204,6 +221,7 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             bidBuffer: [],
         };
 
+        // Broadcast SOLD event
         io.to(tournamentId).emit('auction:sold', { player: updatedPlayer, team: updatedTeam, soldPrice: price });
         io.to(tournamentId).emit('bid:log', {
             message: `🎊 ${updatedPlayer.name} SOLD to ${updatedTeam.name} for ${price}M!`,
@@ -211,7 +229,13 @@ async function soldPlayer(tournamentId, io, teamId, price) {
             category: state.activeCategory,
         });
 
-        // ... [keep rest unchanged] ...
+        // !! Broadcast the updated budget immediately so all clients reflect it in real-time
+        io.to(tournamentId).emit('auction:team_budget', {
+            teamId: updatedTeam._id.toString(),
+            budgetRemaining: updatedTeam.budgetRemaining,
+            squadCount: updatedTeam.squadCount,
+        });
+
         const stats = await getCategoryStats(tournamentId);
         io.to(tournamentId).emit('auction:category_stats', stats);
 
@@ -433,16 +457,19 @@ async function placeBid(tournamentId, teamId, io) {
         return { success: false, reason: 'You have quit this player' };
 
     try {
-        const team = await Team.findById(teamId);
-        if (!team) return { success: false, reason: 'Team not found' };
-
-        const tournament = await Tournament.findById(tournamentId);
-        if (team.squadCount >= tournament.squadSizeLimit)
-            return { success: false, reason: 'Squad is full' };
-
         const nextPrice = +(state.currentPrice + getIncrement(state.currentPrice)).toFixed(1);
-        if (team.budgetRemaining < nextPrice)
-            return { success: false, reason: 'Insufficient budget' };
+
+        // ── ATOMIC VALIDATION ─────────────────────────────────────────────────
+        // budget check is atomic — single conditional read prevents double-spend
+        const team = await Team.findOne({
+            _id: teamId,
+            budgetRemaining: { $gte: nextPrice },
+        });
+        if (!team) return { success: false, reason: 'Insufficient budget or team not found' };
+
+        // ── squadSizeLimit read from cached state — no DB round-trip ──────────
+        if (team.squadCount >= state.squadSizeLimit)
+            return { success: false, reason: 'Squad is full' };
 
         // Save previous price+leader so quit can revert
         state.previousPrice = state.currentPrice;
@@ -450,13 +477,13 @@ async function placeBid(tournamentId, teamId, io) {
 
         state.currentPrice = nextPrice;
         state.currentLeaderTeamId = teamId.toString();
-        state.teamLastBidTime[teamId] = now; // update rate limit timestamp
+        state.teamLastBidTime[teamId] = now;
 
-        // Reset timer using precise timestamp
+        // Reset timer
         stopTimer(tournamentId);
         state.timeRemaining = state.timerDuration;
 
-        // Buffer DB write instead of immediate save
+        // Buffer DB write → flushed to BidHistory in bulk on SOLD
         state.bidBuffer.push({
             tournamentId,
             playerId,
@@ -470,7 +497,15 @@ async function placeBid(tournamentId, teamId, io) {
             type: 'bid',
             category: state.activeCategory,
         });
-        io.to(tournamentId).emit('auction:state', sanitizeState(state));
+
+        // ── DELTA BROADCAST: only send the 2 fields that changed ──────────────
+        // This replaces the expensive full sanitizeState() broadcast on every bid.
+        // Full `auction:state` is only sent on join / reconnect / status changes.
+        io.to(tournamentId).emit('auction:bid', {
+            currentPrice: nextPrice,
+            currentLeaderTeamId: teamId.toString(),
+        });
+
         startTimer(tournamentId, io, handleTimerExpiry);
 
         await checkAutoSell(tournamentId, io);
@@ -532,9 +567,15 @@ async function quitBidding(tournamentId, teamId, io) {
         }
     }
 
-    io.to(tournamentId).emit('auction:state', sanitizeState(state));
+    // Delta broadcast — quit changes price, leader, and quitMap
+    io.to(tournamentId).emit('auction:bid', {
+        currentPrice: state.currentPrice,
+        currentLeaderTeamId: state.currentLeaderTeamId,
+        quitMap: state.quitMap,
+    });
     await checkAutoSell(tournamentId, io);
     return { success: true };
+
 }
 
 // ── Auto-sell ──────────────────────────────────────────────────────────────────

@@ -70,7 +70,7 @@ export default function TeamBidView({
     if (!currentPlayer && !soldNotif && !unsoldNotif) {
         const hasCategory = !!activeCategory;
         return (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px', alignItems: 'start' }}>
+            <div className="grid-2col">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
                     {/* Category announcement */}
@@ -148,7 +148,7 @@ export default function TeamBidView({
     }
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '20px', alignItems: 'start' }}>
+        <div className="grid-2col">
 
             {/* ── Left: Main Auction Window ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -217,16 +217,26 @@ export default function TeamBidView({
 
                         {/* Player Info */}
                         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
-                            {/* Avatar */}
+                            {/* Avatar / Photo */}
                             <div style={{
                                 width: '90px', height: '90px', borderRadius: '50%', flexShrink: 0,
                                 background: `radial-gradient(circle, ${posColor}44, ${posColor}11)`,
                                 border: `3px solid ${posColor}66`,
+                                overflow: 'hidden',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 fontSize: '2.5rem',
                             }}>
-                                ⚽
+                                {currentPlayer.photo ? (
+                                    <img
+                                        src={currentPlayer.photo}
+                                        alt={currentPlayer.name}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                                    />
+                                ) : null}
+                                <span style={{ display: currentPlayer.photo ? 'none' : 'flex' }}>⚽</span>
                             </div>
+
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                                     <span style={{

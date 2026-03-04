@@ -84,19 +84,36 @@ export default function AuctionPage() {
         });
         socket.on('auction:tick', ({ timeRemaining }) => setTimeRemaining(timeRemaining));
 
+        // Slim delta event emitted on every bid/quit (replaces broadcasting full auction:state)
+        // Only patches the fields that change — avoids heavy re-renders on every bid
+        socket.on('auction:bid', ({ currentPrice, currentLeaderTeamId, quitMap }) => {
+            setAuctionState(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    currentPrice,
+                    currentLeaderTeamId,
+                    ...(quitMap !== undefined && { quitMap }),
+                };
+            });
+        });
+
         // Sold/unsold events
         socket.on('auction:sold', ({ player, team, soldPrice }) => {
             setSoldNotif({ player, team, soldPrice });
             setUnsoldNotif(null);
-            // Refresh team budgets
-            api.get(`/tournaments/${tournamentId}/teams`).then(r => setAllTeams(r.data)).catch(() => { });
-            if (user?.role === 'TEAM_OWNER') {
-                api.get(`/tournaments/${tournamentId}/teams/myteam`).then(r => setMyTeam(r.data)).catch(() => { });
-            }
         });
         socket.on('auction:unsold', ({ player }) => {
             setUnsoldNotif({ player });
             setSoldNotif(null);
+        });
+
+        // Real-time budget update — patch without full HTTP refetch
+        socket.on('auction:team_budget', ({ teamId, budgetRemaining, squadCount }) => {
+            setAllTeams(prev => prev.map(t =>
+                t._id === teamId ? { ...t, budgetRemaining, squadCount } : t
+            ));
+            setMyTeam(prev => prev?._id === teamId ? { ...prev, budgetRemaining, squadCount } : prev);
         });
 
         // Pause/resume
@@ -182,10 +199,10 @@ export default function AuctionPage() {
     const isFinished = status === 'FINISHED';
 
     return (
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '20px' }}>
+        <div className="responsive-page">
 
             {/* ── Top Bar ── */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+            <div className="auction-topbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <Link to={`/tournament/${tournamentId}`} style={{ color: '#6b7280', textDecoration: 'none', fontSize: '0.8rem' }}>
                         ← Back

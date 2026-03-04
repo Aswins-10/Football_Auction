@@ -20,5 +20,8 @@ const playerSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 playerSchema.index({ tournamentId: 1, orderIndex: 1 });
+// Compound index for fast category stat lookups (used heavily during auction)
+playerSchema.index({ tournamentId: 1, position: 1, status: 1 });
+
 
 module.exports = mongoose.model('Player', playerSchema);

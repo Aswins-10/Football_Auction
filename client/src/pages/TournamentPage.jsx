@@ -82,7 +82,7 @@ export default function TournamentPage() {
     const meta = STATUS_META[tournament.status] || STATUS_META.UPCOMING;
 
     return (
-        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px' }}>
+        <div className="responsive-page">
 
             {/* Breadcrumb */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
@@ -146,7 +146,7 @@ export default function TournamentPage() {
             </div>
 
             {/* Tabs */}
-            <div style={{
+            <div className="tab-strip" style={{
                 display: 'flex', gap: '4px', padding: '6px',
                 background: 'rgba(17,24,39,0.8)', border: '1px solid rgba(55,65,81,0.4)',
                 borderRadius: '14px', marginBottom: '24px',
