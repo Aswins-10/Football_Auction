@@ -3,6 +3,7 @@ import API_BASE from '../config/api';
 
 const api = axios.create({
     baseURL: `${API_BASE}/api`,
+    withCredentials: true,
 });
 
 // Attach JWT token to every request

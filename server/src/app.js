@@ -19,10 +19,11 @@ setTimeout(() => {
 
 const app = express();
 
-app.use(cors({
+const corsOptions = {
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
     credentials: true,
-}));
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 // Static uploads directory removed — using Cloudinary
 
@@ -34,8 +35,18 @@ app.use('/api/tournaments/:tournamentId/players', playerRoutes);
 app.use('/api/player-search', playerSearchRoute);
 app.use('/api/team-search', teamSearchRoute);
 
-// Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+// Health check endpoints for production uptime monitoring
+app.get('/', (req, res) => {
+    res.status(200).send('Football Auction API running');
+});
+
+app.get('/healthz', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        uptime: process.uptime(),
+        timestamp: Date.now()
+    });
+});
 
 // Error handler
 app.use((err, req, res, next) => {
