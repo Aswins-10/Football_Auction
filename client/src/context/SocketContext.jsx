@@ -9,10 +9,11 @@ export function SocketProvider({ children }) {
 
     const connect = (token) => {
         if (socketRef.current?.connected) return;
-        const socketUrl = `http://${window.location.hostname}:5000`;
+        const socketUrl = import.meta.env.VITE_API_URL;
         socketRef.current = io(socketUrl, {
             auth: { token },
             transports: ['websocket'],
+            withCredentials: true,
         });
         socketRef.current.on('connect', () => setConnected(true));
         socketRef.current.on('disconnect', () => setConnected(false));

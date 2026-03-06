@@ -1,7 +1,8 @@
 import axios from 'axios';
+import API_BASE from '../config/api';
 
 const api = axios.create({
-    baseURL: '/api',
+    baseURL: `${API_BASE}/api`,
 });
 
 // Attach JWT token to every request
@@ -11,11 +12,15 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally and network errors gracefully
 api.interceptors.response.use(
     (res) => res,
     (err) => {
-        if (err.response?.status === 401) {
+        if (!err.response) {
+            // Network Error (Server might be down or waking up from cold start on Render)
+            console.error('Network Error: API might be unavailable.');
+            alert('Cannot reach the server. It might be warming up. Please try again in a few seconds.');
+        } else if (err.response.status === 401) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/login';

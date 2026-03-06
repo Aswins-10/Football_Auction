@@ -8,15 +8,10 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-      '/uploads': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
+    port: 5173,
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
   },
 })
