@@ -96,10 +96,48 @@ To run both the server and the client simultaneously for development:
 
 3. Open your browser and navigate to `http://localhost:5173` to view the application.
 
+## Deployment Guide (Render / Cloud Hosting)
+
+### Quick Deploy with Render Blueprint (`render.yaml`)
+
+1. Push your repository to GitHub.
+2. Go to [Render Dashboard](https://dashboard.render.com/) and click **New** ➔ **Blueprint**.
+3. Connect your GitHub repository. Render will automatically detect `render.yaml` and configure both the backend server and static frontend site.
+4. Fill in the required environment variables:
+   - `MONGO_URI`: Your production MongoDB connection string (e.g. MongoDB Atlas cluster).
+   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` for media storage.
+5. Deploy! Render will link `CLIENT_URL` and `VITE_API_URL` dynamically between both services.
+
+---
+
+### Manual Deployment Checklist
+
+#### Backend (Render / Railway / Heroku)
+- **Root Directory / Subdirectory**: `server`
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/healthz`
+- **Required Environment Variables**:
+  - `MONGO_URI`: Production MongoDB Atlas connection URI.
+  - `JWT_SECRET`: Secret key for JWT signing.
+  - `CLIENT_URL`: HTTPS URL of your deployed frontend (e.g. `https://football-auction-client.onrender.com` or `https://your-app.vercel.app`).
+  - `CLOUDINARY_*`: Cloudinary API keys for image uploads.
+
+#### Frontend (Render Static Site / Vercel / Netlify)
+- **Root Directory / Subdirectory**: `client`
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Single Page Application (SPA) Rewrite Rule**: `/*` ➔ `/index.html` (HTTP 200 rewrite for React Router v7).
+- **Required Environment Variables**:
+  - `VITE_API_URL`: HTTPS URL of your deployed backend API (e.g. `https://football-auction-server.onrender.com`).
+
+---
+
 ## Project Structure
 
 ```text
 Auction/
+├── render.yaml             # Render deployment blueprint
 ├── client/                 # React frontend application
 │   ├── public/             # Static assets
 │   ├── src/                # React components, pages, context, and styles
@@ -115,3 +153,4 @@ Auction/
     ├── server.js           # Server entry point
     └── package.json        # Backend dependencies and scripts
 ```
+

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import api from '../api/axios';
+import API_BASE from '../config/api';
 import { useAuth } from '../context/AuthContext';
 import AdminCategoryGrid from '../components/auction/AdminCategoryGrid';
 import AdminCategoryControl from '../components/auction/AdminCategoryControl';
@@ -56,9 +57,10 @@ export default function AuctionPage() {
     // ── Socket connection ──────────────────────────────────────────────────────
     useEffect(() => {
         const token = localStorage.getItem('token');
-        const socketUrl = `http://${window.location.hostname}:5000`;
-        const socket = io(socketUrl, { auth: { token }, transports: ['websocket'] });
+        const socketUrl = API_BASE;
+        const socket = io(socketUrl, { auth: { token }, transports: ['websocket', 'polling'], withCredentials: true });
         socketRef.current = socket;
+
 
         socket.on('connect', () => {
             setConnected(true);
